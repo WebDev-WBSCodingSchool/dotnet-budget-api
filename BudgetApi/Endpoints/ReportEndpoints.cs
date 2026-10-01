@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BudgetApi.Dtos.Reports;
 using BudgetApi.Models;
 using BudgetApi.Services;
@@ -10,7 +11,9 @@ public static class ReportEndpoints
     public static RouteGroupBuilder MapReportEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/reports")
-            .WithTags("Reports");
+            .WithTags("Reports")
+            // Reports only include the logged-in user's transactions.
+            .RequireAuthorization();
 
         group.MapGet("/summary", GetSummary)
             .WithName("GetSummary")
@@ -22,7 +25,7 @@ public static class ReportEndpoints
     // start and end come from the query string: /api/reports/summary?start=2026-03-01&end=2026-03-31
     // type is optional: leave it out for all transactions, or pass Income or Expense.
     private static async Task<Results<Ok<SummaryReportResponseDto>, ValidationProblem>> GetSummary(
-        DateOnly start, DateOnly end, TransactionType? type, IReportService reportService)
+        DateOnly start, DateOnly end, TransactionType? type, ClaimsPrincipal user, IReportService reportService)
     {
         if (start > end)
         {
@@ -32,6 +35,6 @@ public static class ReportEndpoints
             });
         }
 
-        return TypedResults.Ok(await reportService.GetSummaryAsync(start, end, type));
+        return TypedResults.Ok(await reportService.GetSummaryAsync(user.GetUserId(), start, end, type));
     }
 }

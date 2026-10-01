@@ -15,11 +15,13 @@ public class TransactionService : ITransactionService
         _db = db;
     }
 
-    public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync(TransactionFilter filter)
+    public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync(Guid userId, TransactionFilter filter)
     {
-        // Start with all transactions and add a Where for each filter that was sent.
+        // Start with the user's transactions and add a Where for each filter that was sent.
         // Nothing runs against the database until ToListAsync.
-        var query = _db.Transactions.AsNoTracking();
+        var query = _db.Transactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId);
 
         if (filter.Type is not null)
         {
@@ -55,16 +57,16 @@ public class TransactionService : ITransactionService
             .ToListAsync();
     }
 
-    public async Task<TransactionResponseDto?> GetByIdAsync(Guid id)
+    public async Task<TransactionResponseDto?> GetByIdAsync(Guid userId, Guid id)
     {
         return await _db.Transactions
             .AsNoTracking()
-            .Where(t => t.Id == id)
+            .Where(t => t.Id == id && t.UserId == userId)
             .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
             .FirstOrDefaultAsync();
     }
 
-    public async Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto)
+    public async Task<TransactionResponseDto> CreateAsync(Guid userId, CreateTransactionDto dto)
     {
         var transaction = new Transaction
         {
@@ -73,7 +75,8 @@ public class TransactionService : ITransactionService
             // Validation has already checked that Type is present.
             Type = dto.Type!.Value,
             Description = dto.Description,
-            Amount = dto.Amount
+            Amount = dto.Amount,
+            UserId = userId
         };
 
         _db.Transactions.Add(transaction);
@@ -82,10 +85,12 @@ public class TransactionService : ITransactionService
         return ToDto(transaction);
     }
 
-    public async Task<TransactionResponseDto?> UpdateAsync(Guid id, UpdateTransactionDto dto)
+    public async Task<TransactionResponseDto?> UpdateAsync(Guid userId, Guid id, UpdateTransactionDto dto)
     {
-        // FindAsync returns a tracked entity. SaveChangesAsync writes the properties that changed.
-        var transaction = await _db.Transactions.FindAsync(id);
+        // A tracked query, so SaveChangesAsync writes the properties that changed.
+        // Another user's transaction is not found, so the endpoint returns 404.
+        var transaction = await _db.Transactions
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
         if (transaction is null)
         {
             return null;
@@ -100,9 +105,10 @@ public class TransactionService : ITransactionService
         return ToDto(transaction);
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid userId, Guid id)
     {
-        var transaction = await _db.Transactions.FindAsync(id);
+        var transaction = await _db.Transactions
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
         if (transaction is null)
         {
             return false;

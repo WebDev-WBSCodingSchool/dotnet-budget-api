@@ -5,5 +5,6 @@ namespace BudgetApi.Services;
 
 public interface IReportService
 {
-    Task<SummaryReportResponseDto> GetSummaryAsync(DateOnly start, DateOnly end, TransactionType? type);
+    // type is null for "all transactions".
+    Task<SummaryReportResponseDto> GetSummaryAsync(Guid userId, DateOnly start, DateOnly end, TransactionType? type);
 }

@@ -9,4 +9,10 @@ public class Transaction
 
     // Always positive. Type decides whether it adds to or subtracts from the balance.
     public decimal Amount { get; set; }
+
+    // Foreign key to the owner of the transaction.
+    public Guid UserId { get; set; }
+
+    // Navigation property to the owner.
+    public User User { get; set; } = null!;
 }

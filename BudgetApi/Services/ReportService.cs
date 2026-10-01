@@ -15,16 +15,16 @@ public class ReportService : IReportService
         _db = db;
     }
 
-    public async Task<SummaryReportResponseDto> GetSummaryAsync(DateOnly start, DateOnly end, TransactionType? type)
+    public async Task<SummaryReportResponseDto> GetSummaryAsync(Guid userId, DateOnly start, DateOnly end, TransactionType? type)
     {
         // Both dates are inclusive: from start 00:00 UTC up to (not including) the day after end.
         var from = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         var to = new DateTimeOffset(end.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
-        // The filters are shared by the two queries below.
+        // The filters are shared by the two queries below. Only the user's own transactions count.
         var query = _db.Transactions
             .AsNoTracking()
-            .Where(t => t.Timestamp >= from && t.Timestamp < to);
+            .Where(t => t.UserId == userId && t.Timestamp >= from && t.Timestamp < to);
 
         if (type is not null)
         {
