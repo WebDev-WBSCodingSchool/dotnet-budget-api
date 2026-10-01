@@ -47,7 +47,7 @@ public class TransactionService : ITransactionService
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            // LIKE with % on both sides means "contains". In SQLite, LIKE ignores upper and lower case.
+            // LIKE with % on both sides means "contains". With SQL Server's default collation, LIKE ignores upper and lower case.
             var pattern = $"%{filter.Search}%";
             query = query.Where(t => EF.Functions.Like(t.Description, pattern));
         }

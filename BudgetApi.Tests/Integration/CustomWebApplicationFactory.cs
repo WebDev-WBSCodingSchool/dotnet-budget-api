@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace BudgetApi.Tests.Integration;
 
 // Starts the real API in memory, with two changes for testing:
-// the SQLite database is replaced by an in-memory one, and a fake auth scheme is added.
+// the SQL Server database is replaced by an in-memory one, and a fake auth scheme is added.
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     // The API reads and writes enums as text ("Income"). The tests use the same JSON settings
@@ -46,7 +46,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // so anything registered here replaces or adds to the real registrations.
         builder.ConfigureTestServices(services =>
         {
-            // Remove the SQLite configuration that AddDbContext added in Program.cs ...
+            // Remove the SQL Server configuration that AddDbContext added in Program.cs ...
             services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<ApplicationDbContext>>();
 

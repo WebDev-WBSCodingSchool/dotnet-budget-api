@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/logs/
+*.db
+*.db-shm
+*.db-wal
+.git/
+.github/
+.vs/
+.vscode/
+*.user
+BudgetApi.Tests/
+Dockerfile
+docker-compose.yaml
+README.md

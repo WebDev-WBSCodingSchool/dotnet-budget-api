@@ -40,7 +40,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 // The DbContext is registered as scoped: each request gets its own instance.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // UserManager<User>, the password hasher and the validators. No cookies or UI.
 builder.Services

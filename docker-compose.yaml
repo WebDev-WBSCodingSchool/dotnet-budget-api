@@ -1,0 +1,40 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    # SQL Server only ships amd64 images. On Apple silicon, Docker runs it through emulation.
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: 'Y'
+      # Development password only. It must meet SQL Server's complexity rules.
+      MSSQL_SA_PASSWORD: 'Your_password123'
+    ports:
+      - '1433:1433'
+    volumes:
+      - db-data:/var/opt/mssql
+    healthcheck:
+      # $$ escapes the $ so Compose passes $MSSQL_SA_PASSWORD to the container shell.
+      test:
+        [
+          'CMD-SHELL',
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' > /dev/null 2>&1 || exit 1"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    ports:
+      - '8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # A double underscore stands for the ":" in ConnectionStrings:DefaultConnection.
+      - ConnectionStrings__DefaultConnection=Server=db;Database=BudgetDb;User Id=sa;Password=Your_password123;TrustServerCertificate=true
+      # Development applies the migrations, seeds sample data, serves Scalar and reads
+      # the JWT key from appsettings.Development.json. See the README for Production mode.
+      - ASPNETCORE_ENVIRONMENT=Development
+
+volumes:
+  db-data:
