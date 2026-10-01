@@ -23,9 +23,8 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// TransactionService uses the DbContext, so it is scoped too.
-// ReportService uses TransactionService, so it must be scoped as well:
-// a singleton must not depend on a scoped service.
+// Both services use the DbContext, so they are scoped too.
+// A singleton must not depend on a scoped service.
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 
@@ -40,6 +39,15 @@ if (app.Environment.IsDevelopment())
 
     // Interactive API reference: /scalar
     app.MapScalarApiReference();
+
+    // The DbContext is scoped, and no request is running yet, so create a scope by hand.
+    // The scope and the DbContext are disposed at the end of this block.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    // Apply any pending migrations, then add sample data if the database is empty.
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(db);
 }
 
 app.UseExceptionHandler();

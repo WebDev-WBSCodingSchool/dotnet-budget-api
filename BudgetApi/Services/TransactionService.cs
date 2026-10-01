@@ -15,27 +15,42 @@ public class TransactionService : ITransactionService
         _db = db;
     }
 
-    public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync()
+    public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync(TransactionFilter filter)
     {
-        // Read-only query: no tracking, and only the columns the DTO needs.
-        return await _db.Transactions
-            .AsNoTracking()
+        // Start with all transactions and add a Where for each filter that was sent.
+        // Nothing runs against the database until ToListAsync.
+        var query = _db.Transactions.AsNoTracking();
+
+        if (filter.Type is not null)
+        {
+            query = query.Where(t => t.Type == filter.Type);
+        }
+
+        if (filter.From is not null)
+        {
+            var from = StartOfDay(filter.From.Value);
+            query = query.Where(t => t.Timestamp >= from);
+        }
+
+        if (filter.To is not null)
+        {
+            // Include the whole "to" day.
+            var to = StartOfDay(filter.To.Value.AddDays(1));
+            query = query.Where(t => t.Timestamp < to);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            // LIKE with % on both sides means "contains". In SQLite, LIKE ignores upper and lower case.
+            var pattern = $"%{filter.Search}%";
+            query = query.Where(t => EF.Functions.Like(t.Description, pattern));
+        }
+
+        // Sort before paging, so every page comes from the same order.
+        return await query
             .OrderByDescending(t => t.Timestamp)
-            .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
-            .ToListAsync();
-    }
-
-    // Both dates are inclusive. The database compares points in time, so each day
-    // runs from midnight UTC to the next midnight UTC.
-    public async Task<IReadOnlyList<TransactionResponseDto>> GetInRangeAsync(DateOnly start, DateOnly end)
-    {
-        var from = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-        var to = new DateTimeOffset(end.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-
-        return await _db.Transactions
-            .AsNoTracking()
-            .Where(t => t.Timestamp >= from && t.Timestamp < to)
-            .OrderBy(t => t.Timestamp)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
             .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
             .ToListAsync();
     }
@@ -97,6 +112,10 @@ public class TransactionService : ITransactionService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    // The database compares points in time, so a calendar day starts at midnight UTC.
+    private static DateTimeOffset StartOfDay(DateOnly date) =>
+        new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
     private static TransactionResponseDto ToDto(Transaction t) =>
         new(t.Id, t.Timestamp, t.Type, t.Description, t.Amount);

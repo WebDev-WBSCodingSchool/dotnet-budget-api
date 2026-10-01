@@ -1,19 +1,17 @@
-# Budget API: step 02, EF Core with SQLite
+# Budget API: step 03, queries and seeding
 
-Exercise: Budget API with DB, Part I
+Exercise: Budget API with DB, Part II
 
-This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of **Budget API with DB, Part I** and the starting point for **Budget API with DB, Part II**.
+This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of **Budget API with DB, Part II** and the starting point for **Budget API: Multi-User**.
 
 ## What this step adds
 
-- `Microsoft.EntityFrameworkCore.Sqlite` and `Microsoft.EntityFrameworkCore.Design` 10.0.x
-- The `dotnet-ef` tool in a local tool manifest, `dotnet-tools.json`
-- `Data/ApplicationDbContext.cs` with a `DateTimeOffset` value converter, the enum stored as text, a decimal precision for `Amount` and an index on `Timestamp`
-- A `DefaultConnection` connection string in `appsettings.json`
-- The DbContext, `TransactionService` and `ReportService` registered as scoped
-- `TransactionService` reads and writes the database. `GetInRangeAsync` compares points in time, so each day runs from midnight UTC to the next midnight UTC
-- The `InitialCreate` migration in `Data/Migrations`
-- The endpoints, DTOs, interfaces and `ReportService` are unchanged
+- `GET /api/transactions` takes optional filters: `type`, `from`, `to`, `search` and paging with `page` and `pageSize` (1 to 100, default 20)
+- `Dtos/Transactions/TransactionFilter.cs` collects the filters for `ITransactionService.GetAllAsync`
+- `ReportService` uses the DbContext and computes the totals in the database with `GroupBy` and `Sum`
+- `Data/DbSeeder.cs` adds sample transactions when the database is empty
+- In Development the app applies pending migrations and runs the seeder on startup
+- No model changes, so there is no new migration
 
 ## Project layout
 
@@ -26,7 +24,7 @@ BudgetApi/
   Dtos/        Transactions/, Reports/
   Models/      Transaction.cs, TransactionType.cs
   Services/    ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs
-  Data/        ApplicationDbContext.cs, Migrations/
+  Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
 dotnet-tools.json
 ```
 
@@ -38,13 +36,16 @@ Requires the .NET 10 SDK. Run these commands from the repository root.
 # Install the dotnet-ef version pinned in dotnet-tools.json
 dotnet tool restore
 
-# Create the database from the migrations
-dotnet ef database update --project BudgetApi
-
 dotnet run --project BudgetApi
 ```
 
-To start again with a fresh database, stop the app and delete `BudgetApi/budget.db`, then run `dotnet ef database update --project BudgetApi` again.
+In Development the app applies migrations and seeds the database on startup. To apply migrations without running the app:
+
+```bash
+dotnet ef database update --project BudgetApi
+```
+
+To start again with a fresh database, stop the app and delete `BudgetApi/budget.db`. The seeder only adds data to an empty database, so delete a `budget.db` from step 02 to see the sample transactions.
 
 The API listens on `http://localhost:5090`.
 
@@ -61,13 +62,17 @@ curl -X POST http://localhost:5090/api/transactions \
   -d '{"type":"Expense","description":"Rent","amount":900.50,"timestamp":"2026-03-02T10:00:00+01:00"}'
 
 curl "http://localhost:5090/api/reports/summary?start=2026-03-01&end=2026-03-31"
+
+curl "http://localhost:5090/api/transactions?type=Expense&search=rent&page=1&pageSize=5"
 ```
+
+The seed data is dated relative to the day you first start the app, so pick report dates around today.
 
 ## Endpoints
 
 | Method | Route | Result |
 |---|---|---|
-| GET | /api/transactions | 200 |
+| GET | /api/transactions?type=&from=&to=&search=&page=&pageSize= | 200, 400 |
 | GET | /api/transactions/{id} | 200, 404 |
 | POST | /api/transactions | 201, 400 |
 | PUT | /api/transactions/{id} | 200, 400, 404 |
@@ -78,4 +83,4 @@ Data is stored in the SQLite file `BudgetApi/budget.db`, which is ignored by Git
 
 ## Next step
 
-`step-03-queries`
+`step-04-multi-user`

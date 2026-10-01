@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using BudgetApi.Dtos.Transactions;
+using BudgetApi.Models;
 using BudgetApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -13,7 +15,8 @@ public static class TransactionEndpoints
 
         group.MapGet("/", GetAllTransactions)
             .WithName("GetAllTransactions")
-            .WithSummary("List all transactions, newest first");
+            .WithSummary("List transactions, newest first, with optional filters and paging")
+            .ProducesValidationProblem();
 
         group.MapGet("/{id:guid}", GetTransactionById)
             .WithName("GetTransactionById")
@@ -36,10 +39,19 @@ public static class TransactionEndpoints
         return group;
     }
 
+    // Every filter comes from the query string and is optional, for example
+    // /api/transactions?type=Expense&from=2026-03-01&to=2026-03-31&search=rent&page=1&pageSize=20
     private static async Task<Ok<IReadOnlyList<TransactionResponseDto>>> GetAllTransactions(
-        ITransactionService transactionService)
+        TransactionType? type,
+        DateOnly? from,
+        DateOnly? to,
+        string? search,
+        ITransactionService transactionService,
+        [Range(1, int.MaxValue)] int page = 1,
+        [Range(1, 100)] int pageSize = 20)
     {
-        return TypedResults.Ok(await transactionService.GetAllAsync());
+        var filter = new TransactionFilter(type, from, to, search, page, pageSize);
+        return TypedResults.Ok(await transactionService.GetAllAsync(filter));
     }
 
     private static async Task<Results<Ok<TransactionResponseDto>, NotFound>> GetTransactionById(
