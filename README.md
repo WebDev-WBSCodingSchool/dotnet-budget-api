@@ -1,18 +1,19 @@
-# Budget API: step 05, unit tests
+# Budget API: step 06, integration tests
 
-Exercise: Budget API unit tests
+Exercise: Budget API integration tests
 
-This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the Budget API unit testing exercise and the starting point for the integration testing exercise.
+This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the Budget API integration testing exercise and the starting point for the Budget API observability exercise.
 
 ## What this step adds
 
-- A test project, `BudgetApi.Tests`, created with `dotnet new xunit` and added to `BudgetApi.slnx`
-- Packages: Moq 4.21.0 and `Microsoft.EntityFrameworkCore.InMemory` 10.0.x
-- `Unit/TestDbContextFactory.cs` creates an in-memory `ApplicationDbContext` with a new database name for every test
-- `Unit/TransactionServiceTests.cs` tests create, list, get, update and delete, including another user's transactions and unknown ids
-- `Unit/ReportServiceTests.cs` checks the totals, the range boundaries, the `type` filter, other users' transactions and an empty range
-- `Unit/AuthServiceTests.cs` tests `AuthService` with a mocked `UserManager<User>` (Moq) and checks the `sub` claim of the issued token
-- No changes to the API project
+- `Microsoft.AspNetCore.Mvc.Testing` 10.0.x in `BudgetApi.Tests`
+- `Integration/CustomWebApplicationFactory.cs` starts the API in memory in the `Testing` environment. It sets a test `Jwt:Key`, replaces the SQLite `DbContext` registration with an in-memory database unique to each factory, and adds helpers to create clients and test data
+- `Integration/TestAuthHandler.cs`, a fake authentication scheme that logs a test in as the user named in the `X-Test-UserId` header
+- `Integration/TransactionEndpointsTests.cs`: `401` without a user, `201` with a `Location` header, `400` for invalid bodies, and `404` when another user reads, updates or deletes a transaction
+- `Integration/ReportEndpointsTests.cs`: totals for a range, other users' transactions ignored, and `400` for an invalid query
+- `Integration/AuthEndpointsTests.cs`: a full register, login and Bearer flow with a real JWT, an invalid token, a wrong password, a weak password and a taken email
+- The tests use JSON options with `JsonStringEnumConverter`, so they read the enums the API writes as text
+- No changes to the API project. .NET 10 makes the `Program` class public, so `WebApplicationFactory<Program>` works without a `public partial class Program` line
 
 ## The signing key
 
@@ -39,7 +40,8 @@ BudgetApi/
   Services/    IAuthService.cs, AuthService.cs, ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs
   Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
 BudgetApi.Tests/
-  Unit/        TestDbContextFactory.cs, TransactionServiceTests.cs, ReportServiceTests.cs, AuthServiceTests.cs
+  Unit/          TestDbContextFactory.cs, TransactionServiceTests.cs, ReportServiceTests.cs, AuthServiceTests.cs
+  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, TransactionEndpointsTests.cs, ReportEndpointsTests.cs, AuthEndpointsTests.cs
 dotnet-tools.json
 ```
 
@@ -118,4 +120,4 @@ Data is stored in the SQLite file `BudgetApi/budget.db`, which is ignored by Git
 
 ## Next step
 
-`step-06-integration-tests`
+`step-07-observability`
