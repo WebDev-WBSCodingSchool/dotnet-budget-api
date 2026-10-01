@@ -1,20 +1,18 @@
-# Budget API: step 04, multiple users
+# Budget API: step 05, unit tests
 
-Exercise: Budget API: Multi-user
+Exercise: Budget API unit tests
 
-This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of **Budget API: Multi-user** and the starting point for the Budget API unit testing exercise.
+This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the Budget API unit testing exercise and the starting point for the integration testing exercise.
 
 ## What this step adds
 
-- `Microsoft.AspNetCore.Identity.EntityFrameworkCore` and `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.x
-- `Models/User.cs`, an `IdentityUser<Guid>` with a name and a creation date
-- `ApplicationDbContext` derives from `IdentityDbContext<User, IdentityRole<Guid>, Guid>`. Each `Transaction` has a required `UserId`
-- The `AddUsers` migration
-- `POST /auth/register`, `POST /auth/login` (returns a signed JWT) and `GET /auth/me`, with `IAuthService` and `AuthService`
-- The transaction and report endpoints call `.RequireAuthorization()` and only see the logged-in user's transactions. `Endpoints/ClaimsPrincipalExtensions.cs` reads the user id from the `sub` claim
-- The seeder creates two users with passwords and gives each of them sample transactions
-- A Bearer security scheme in the OpenAPI document, so Scalar can send the token
-- A `Jwt` section in the configuration and a `UserSecretsId` in the project file
+- A test project, `BudgetApi.Tests`, created with `dotnet new xunit` and added to `BudgetApi.slnx`
+- Packages: Moq 4.21.0 and `Microsoft.EntityFrameworkCore.InMemory` 10.0.x
+- `Unit/TestDbContextFactory.cs` creates an in-memory `ApplicationDbContext` with a new database name for every test
+- `Unit/TransactionServiceTests.cs` tests create, list, get, update and delete, including another user's transactions and unknown ids
+- `Unit/ReportServiceTests.cs` checks the totals, the range boundaries, the `type` filter, other users' transactions and an empty range
+- `Unit/AuthServiceTests.cs` tests `AuthService` with a mocked `UserManager<User>` (Moq) and checks the `sub` claim of the issued token
+- No changes to the API project
 
 ## The signing key
 
@@ -40,6 +38,8 @@ BudgetApi/
   Models/      User.cs, Transaction.cs, TransactionType.cs
   Services/    IAuthService.cs, AuthService.cs, ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs
   Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
+BudgetApi.Tests/
+  Unit/        TestDbContextFactory.cs, TransactionServiceTests.cs, ReportServiceTests.cs, AuthServiceTests.cs
 dotnet-tools.json
 ```
 
@@ -63,6 +63,12 @@ dotnet ef database update --project BudgetApi
 To start again with a fresh database, stop the app and delete `BudgetApi/budget.db`.
 
 If you have a `budget.db` from step 03, its transactions have no owner, so the `AddUsers` migration fails on it. Delete `BudgetApi/budget.db` (or run `dotnet ef database drop --project BudgetApi --force`) and start the app again.
+
+Run the tests:
+
+```bash
+dotnet test
+```
 
 The API listens on `http://localhost:5090`.
 
@@ -112,4 +118,4 @@ Data is stored in the SQLite file `BudgetApi/budget.db`, which is ignored by Git
 
 ## Next step
 
-`step-05-unit-tests`
+`step-06-integration-tests`
