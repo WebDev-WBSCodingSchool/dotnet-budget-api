@@ -1,19 +1,19 @@
-# Budget API: step 06, integration tests
+# Budget API: step 07, logging, health checks and metrics
 
-Exercise: Budget API integration tests
+Exercise: Budget API observability
 
-This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the Budget API integration testing exercise and the starting point for the Budget API observability exercise.
+This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the Budget API observability exercise and the starting point for the Docker Compose exercise (API and SQL Server).
 
 ## What this step adds
 
-- `Microsoft.AspNetCore.Mvc.Testing` 10.0.x in `BudgetApi.Tests`
-- `Integration/CustomWebApplicationFactory.cs` starts the API in memory in the `Testing` environment. It sets a test `Jwt:Key`, replaces the SQLite `DbContext` registration with an in-memory database unique to each factory, and adds helpers to create clients and test data
-- `Integration/TestAuthHandler.cs`, a fake authentication scheme that logs a test in as the user named in the `X-Test-UserId` header
-- `Integration/TransactionEndpointsTests.cs`: `401` without a user, `201` with a `Location` header, `400` for invalid bodies, and `404` when another user reads, updates or deletes a transaction
-- `Integration/ReportEndpointsTests.cs`: totals for a range, other users' transactions ignored, and `400` for an invalid query
-- `Integration/AuthEndpointsTests.cs`: a full register, login and Bearer flow with a real JWT, an invalid token, a wrong password, a weak password and a taken email
-- The tests use JSON options with `JsonStringEnumConverter`, so they read the enums the API writes as text
-- No changes to the API project. .NET 10 makes the `Program` class public, so `WebApplicationFactory<Program>` works without a `public partial class Program` line
+- `Serilog.AspNetCore` 10.0.0. All logging goes through Serilog, to the console and to a daily file in `BudgetApi/logs/`
+- A `Serilog` section in `appsettings.json` replaces the `Logging` section
+- `UseSerilogRequestLogging()` writes one line per request with the method, path, status code and duration
+- `TransactionService`, `ReportService` and `AuthService` log business events with message templates (`{UserId}`, `{TransactionId}`). No passwords, tokens or email addresses are logged
+- Health checks with `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` 10.0.x. `Endpoints/HealthEndpoints.cs` maps `/health`, `/health/ready` (the database check) and `/health/live` (no checks), without authorisation
+- `Services/BudgetMetrics.cs`, a `BudgetApi` meter with the counters `budgetapi.transactions.created` and `budgetapi.logins.failed`
+- `dotnet-counters` 10.0.745401 in `dotnet-tools.json`
+- The unit tests pass `NullLogger<T>.Instance` and a `BudgetMetrics` to the services, and `Integration/HealthEndpointsTests.cs` checks the three health endpoints
 
 ## The signing key
 
@@ -33,15 +33,15 @@ In production, set it as an environment variable (`Jwt__Key`) or in a key vault.
 BudgetApi.slnx
 BudgetApi/
   Program.cs
-  Endpoints/   AuthEndpoints.cs, TransactionEndpoints.cs, ReportEndpoints.cs, ClaimsPrincipalExtensions.cs
+  Endpoints/   AuthEndpoints.cs, TransactionEndpoints.cs, ReportEndpoints.cs, HealthEndpoints.cs, ClaimsPrincipalExtensions.cs
   Errors/      GlobalExceptionHandler.cs
   Dtos/        Auth/, Users/, Transactions/, Reports/
   Models/      User.cs, Transaction.cs, TransactionType.cs
-  Services/    IAuthService.cs, AuthService.cs, ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs
+  Services/    IAuthService.cs, AuthService.cs, ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs, BudgetMetrics.cs
   Data/        ApplicationDbContext.cs, DbSeeder.cs, Migrations/
 BudgetApi.Tests/
   Unit/          TestDbContextFactory.cs, TransactionServiceTests.cs, ReportServiceTests.cs, AuthServiceTests.cs
-  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, TransactionEndpointsTests.cs, ReportEndpointsTests.cs, AuthEndpointsTests.cs
+  Integration/   CustomWebApplicationFactory.cs, TestAuthHandler.cs, TransactionEndpointsTests.cs, ReportEndpointsTests.cs, AuthEndpointsTests.cs, HealthEndpointsTests.cs
 dotnet-tools.json
 ```
 
@@ -50,7 +50,7 @@ dotnet-tools.json
 Requires the .NET 10 SDK. Run these commands from the repository root.
 
 ```bash
-# Install the dotnet-ef version pinned in dotnet-tools.json
+# Install the dotnet-ef and dotnet-counters versions pinned in dotnet-tools.json
 dotnet tool restore
 
 dotnet run --project BudgetApi
@@ -100,6 +100,19 @@ The seeded users `ada@example.com` (6 transactions) and `alan@example.com` (4 tr
 
 In Scalar, paste the token into the Authentication box to call the protected endpoints.
 
+Check the health endpoints and watch the custom counters while you create transactions:
+
+```bash
+curl http://localhost:5090/health
+curl http://localhost:5090/health/ready
+curl http://localhost:5090/health/live
+
+# In a second terminal
+dotnet dotnet-counters monitor --name BudgetApi --counters BudgetApi
+```
+
+The log files are in `BudgetApi/logs/`, which is ignored by Git.
+
 ## Endpoints
 
 | Method | Route | Result |
@@ -113,6 +126,9 @@ In Scalar, paste the token into the Authentication box to call the protected end
 | PUT | /api/transactions/{id} (token, owner only) | 200, 400, 401, 404 |
 | DELETE | /api/transactions/{id} (token, owner only) | 204, 401, 404 |
 | GET | /api/reports/summary?start={date}&end={date}&type={type} (token) | 200, 400, 401 |
+| GET | /health | 200, 503 |
+| GET | /health/ready | 200, 503 |
+| GET | /health/live | 200 |
 
 Every transaction belongs to a user. A request for another user's transaction returns `404`.
 
@@ -120,4 +136,4 @@ Data is stored in the SQLite file `BudgetApi/budget.db`, which is ignored by Git
 
 ## Next step
 
-`step-07-observability`
+`step-08-sql-server-docker`

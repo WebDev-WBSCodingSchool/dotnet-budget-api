@@ -13,11 +13,16 @@ public class AuthService : IAuthService
 {
     private readonly UserManager<User> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthService> _logger;
+    private readonly BudgetMetrics _metrics;
 
-    public AuthService(UserManager<User> userManager, IConfiguration configuration)
+    public AuthService(
+        UserManager<User> userManager, IConfiguration configuration, ILogger<AuthService> logger, BudgetMetrics metrics)
     {
         _userManager = userManager;
         _configuration = configuration;
+        _logger = logger;
+        _metrics = metrics;
     }
 
     public async Task<(IdentityResult Result, UserResponseDto? User)> RegisterAsync(RegisterDto dto)
@@ -34,8 +39,11 @@ public class AuthService : IAuthService
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded)
         {
+            _logger.LogInformation("Registration rejected: {Errors}", string.Join(", ", result.Errors.Select(e => e.Code)));
             return (result, null);
         }
+
+        _logger.LogInformation("User {UserId} registered", user.Id);
 
         return (result, ToDto(user));
     }
@@ -46,11 +54,17 @@ public class AuthService : IAuthService
         if (user is null || !await _userManager.CheckPasswordAsync(user, dto.Password))
         {
             // Same answer for an unknown email and a wrong password.
+            // The email is not logged, because logs should not contain personal data.
+            _logger.LogWarning("Failed login attempt");
+            _metrics.LoginFailed();
             return null;
         }
 
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_configuration.GetValue("Jwt:ExpiryMinutes", 60));
-        return new LoginResponseDto(CreateToken(user, expiresAt), expiresAt);
+        var token = CreateToken(user, expiresAt);
+        _logger.LogInformation("User {UserId} logged in", user.Id);
+
+        return new LoginResponseDto(token, expiresAt);
     }
 
     public async Task<UserResponseDto?> GetUserAsync(Guid userId)

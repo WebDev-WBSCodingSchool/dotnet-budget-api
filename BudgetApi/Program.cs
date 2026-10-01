@@ -12,8 +12,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog replaces the default logging providers. Every ILogger<T> in the app now writes through it.
+// Minimum levels come from the "Serilog" section in appsettings.json.
+builder.Services.AddSerilog((services, logger) => logger
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    // One file per day in BudgetApi/logs. shared: true lets several app instances
+    // (for example the integration tests) write to the same file.
+    .WriteTo.File("logs/budget-api-.log", rollingInterval: RollingInterval.Day, shared: true));
 
 // Read and write enums as text ("Income") instead of numbers (0).
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -72,6 +84,14 @@ builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Custom metrics. A singleton, because the counters must live as long as the app.
+builder.Services.AddSingleton<BudgetMetrics>();
+
+// Health checks. The DbContext check tries to connect to the database.
+// The "ready" tag puts it in the /health/ready endpoint.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>(tags: ["ready"]);
+
 builder.Services.AddOpenApi(options =>
 {
     // Describe the Bearer scheme, so Scalar shows an "Authentication" box for the token.
@@ -110,6 +130,10 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+// Writes one log line per request with the method, path, status code and duration.
+// It comes first so it also sees requests that end in an exception.
+app.UseSerilogRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     // The OpenAPI document: /openapi/v1.json
@@ -139,5 +163,6 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapTransactionEndpoints();
 app.MapReportEndpoints();
+app.MapHealthEndpoints();
 
 app.Run();

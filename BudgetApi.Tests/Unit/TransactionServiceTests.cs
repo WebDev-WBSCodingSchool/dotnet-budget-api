@@ -1,7 +1,10 @@
+using System.Diagnostics.Metrics;
 using BudgetApi.Data;
 using BudgetApi.Dtos.Transactions;
 using BudgetApi.Models;
 using BudgetApi.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BudgetApi.Tests.Unit;
 
@@ -17,7 +20,17 @@ public class TransactionServiceTests
     public TransactionServiceTests()
     {
         _db = TestDbContextFactory.Create();
-        _service = new TransactionService(_db);
+
+        // NullLogger discards log messages. The tests do not check what is logged.
+        var logger = NullLogger<TransactionService>.Instance;
+
+        // BudgetMetrics needs an IMeterFactory. AddMetrics registers the default one.
+        var meterFactory = new ServiceCollection()
+            .AddMetrics()
+            .BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+
+        _service = new TransactionService(_db, logger, new BudgetMetrics(meterFactory));
     }
 
     private async Task<User> AddUserAsync(string name)

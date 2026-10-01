@@ -1,8 +1,11 @@
+using System.Diagnostics.Metrics;
 using BudgetApi.Dtos.Auth;
 using BudgetApi.Models;
 using BudgetApi.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Moq;
 
@@ -32,7 +35,13 @@ public class AuthServiceTests
             })
             .Build();
 
-        _service = new AuthService(_userManager.Object, configuration);
+        var meterFactory = new ServiceCollection()
+            .AddMetrics()
+            .BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+
+        _service = new AuthService(
+            _userManager.Object, configuration, NullLogger<AuthService>.Instance, new BudgetMetrics(meterFactory));
     }
 
     [Fact]

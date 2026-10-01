@@ -1,6 +1,7 @@
 using BudgetApi.Data;
 using BudgetApi.Models;
 using BudgetApi.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BudgetApi.Tests.Unit;
 
@@ -16,7 +17,7 @@ public class ReportServiceTests
     public ReportServiceTests()
     {
         _db = TestDbContextFactory.Create();
-        _service = new ReportService(_db);
+        _service = new ReportService(_db, NullLogger<ReportService>.Instance);
     }
 
     private async Task<User> AddUserAsync(string name)

@@ -9,10 +9,12 @@ namespace BudgetApi.Services;
 public class ReportService : IReportService
 {
     private readonly ApplicationDbContext _db;
+    private readonly ILogger<ReportService> _logger;
 
-    public ReportService(ApplicationDbContext db)
+    public ReportService(ApplicationDbContext db, ILogger<ReportService> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<SummaryReportResponseDto> GetSummaryAsync(Guid userId, DateOnly start, DateOnly end, TransactionType? type)
@@ -45,6 +47,10 @@ public class ReportService : IReportService
             .OrderBy(t => t.Timestamp)
             .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
             .ToListAsync();
+
+        _logger.LogInformation(
+            "Summary for user {UserId} from {Start} to {End} generated with {TransactionCount} transactions",
+            userId, start, end, transactions.Count);
 
         return new SummaryReportResponseDto(
             start, end, type, totalIncome, totalExpense, totalIncome - totalExpense, transactions);

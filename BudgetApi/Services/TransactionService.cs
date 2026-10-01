@@ -9,10 +9,14 @@ namespace BudgetApi.Services;
 public class TransactionService : ITransactionService
 {
     private readonly ApplicationDbContext _db;
+    private readonly ILogger<TransactionService> _logger;
+    private readonly BudgetMetrics _metrics;
 
-    public TransactionService(ApplicationDbContext db)
+    public TransactionService(ApplicationDbContext db, ILogger<TransactionService> logger, BudgetMetrics metrics)
     {
         _db = db;
+        _logger = logger;
+        _metrics = metrics;
     }
 
     public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync(Guid userId, TransactionFilter filter)
@@ -59,11 +63,18 @@ public class TransactionService : ITransactionService
 
     public async Task<TransactionResponseDto?> GetByIdAsync(Guid userId, Guid id)
     {
-        return await _db.Transactions
+        var transaction = await _db.Transactions
             .AsNoTracking()
             .Where(t => t.Id == id && t.UserId == userId)
             .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
             .FirstOrDefaultAsync();
+
+        if (transaction is null)
+        {
+            _logger.LogWarning("User {UserId} requested transaction {TransactionId}, which does not exist or belongs to another user", userId, id);
+        }
+
+        return transaction;
     }
 
     public async Task<TransactionResponseDto> CreateAsync(Guid userId, CreateTransactionDto dto)
@@ -82,6 +93,10 @@ public class TransactionService : ITransactionService
         _db.Transactions.Add(transaction);
         await _db.SaveChangesAsync();
 
+        // {TransactionId} and {UserId} are stored as separate properties, so the logs can be searched by them.
+        _logger.LogInformation("User {UserId} created transaction {TransactionId}", userId, transaction.Id);
+        _metrics.TransactionCreated();
+
         return ToDto(transaction);
     }
 
@@ -93,6 +108,7 @@ public class TransactionService : ITransactionService
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
         if (transaction is null)
         {
+            _logger.LogWarning("User {UserId} tried to update transaction {TransactionId}, which does not exist or belongs to another user", userId, id);
             return null;
         }
 
@@ -101,6 +117,8 @@ public class TransactionService : ITransactionService
         transaction.Amount = dto.Amount;
         transaction.Timestamp = dto.Timestamp!.Value;
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} updated transaction {TransactionId}", userId, id);
 
         return ToDto(transaction);
     }
@@ -111,11 +129,14 @@ public class TransactionService : ITransactionService
             .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
         if (transaction is null)
         {
+            _logger.LogWarning("User {UserId} tried to delete transaction {TransactionId}, which does not exist or belongs to another user", userId, id);
             return false;
         }
 
         _db.Transactions.Remove(transaction);
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation("User {UserId} deleted transaction {TransactionId}", userId, id);
         return true;
     }
 
