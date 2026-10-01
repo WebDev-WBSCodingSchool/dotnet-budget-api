@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
+using BudgetApi.Data;
 using BudgetApi.Endpoints;
 using BudgetApi.Errors;
 using BudgetApi.Services;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,11 +19,15 @@ builder.Services.AddValidation();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// The transactions live in memory inside TransactionService, so it is a singleton:
-// one instance, and one dictionary, shared by every request.
-// ReportService depends on it and is a singleton too (a singleton must not depend on a scoped service).
-builder.Services.AddSingleton<ITransactionService, TransactionService>();
-builder.Services.AddSingleton<IReportService, ReportService>();
+// The DbContext is registered as scoped: each request gets its own instance.
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// TransactionService uses the DbContext, so it is scoped too.
+// ReportService uses TransactionService, so it must be scoped as well:
+// a singleton must not depend on a scoped service.
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 
 builder.Services.AddOpenApi();
 

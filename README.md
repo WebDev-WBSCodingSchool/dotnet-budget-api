@@ -1,19 +1,19 @@
-# Budget API: step 01, in-memory API
+# Budget API: step 02, EF Core with SQLite
 
-Exercise: Budget API
+Exercise: Budget API with DB, Part I
 
-This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of the **Budget API** exercise and the starting point for **Budget API with DB, Part I**.
+This repository holds the Budget API that you build in the ASP.NET Core exercises. Each exercise has its own branch. This branch is the finished state of **Budget API with DB, Part I** and the starting point for **Budget API with DB, Part II**.
 
 ## What this step adds
 
-- A solution (`BudgetApi.slnx`) with one project in `BudgetApi/`
-- `Models/Transaction.cs` and `Models/TransactionType.cs` (`Income`, `Expense`)
-- Request and response DTOs in `Dtos/Transactions` and `Dtos/Reports`, validated with DataAnnotations and `AddValidation()`
-- `ITransactionService` and `IReportService` with in-memory implementations, registered as singletons
-- CRUD endpoints for transactions and a summary report for a date range, grouped with `MapGroup`
-- Enums sent and received as text with `JsonStringEnumConverter`
-- ProblemDetails for every error, with `GlobalExceptionHandler`
-- An OpenAPI document and a Scalar API reference in Development
+- `Microsoft.EntityFrameworkCore.Sqlite` and `Microsoft.EntityFrameworkCore.Design` 10.0.x
+- The `dotnet-ef` tool in a local tool manifest, `dotnet-tools.json`
+- `Data/ApplicationDbContext.cs` with a `DateTimeOffset` value converter, the enum stored as text, a decimal precision for `Amount` and an index on `Timestamp`
+- A `DefaultConnection` connection string in `appsettings.json`
+- The DbContext, `TransactionService` and `ReportService` registered as scoped
+- `TransactionService` reads and writes the database. `GetInRangeAsync` compares points in time, so each day runs from midnight UTC to the next midnight UTC
+- The `InitialCreate` migration in `Data/Migrations`
+- The endpoints, DTOs, interfaces and `ReportService` are unchanged
 
 ## Project layout
 
@@ -26,6 +26,8 @@ BudgetApi/
   Dtos/        Transactions/, Reports/
   Models/      Transaction.cs, TransactionType.cs
   Services/    ITransactionService.cs, TransactionService.cs, IReportService.cs, ReportService.cs
+  Data/        ApplicationDbContext.cs, Migrations/
+dotnet-tools.json
 ```
 
 ## Run it
@@ -33,8 +35,16 @@ BudgetApi/
 Requires the .NET 10 SDK. Run these commands from the repository root.
 
 ```bash
+# Install the dotnet-ef version pinned in dotnet-tools.json
+dotnet tool restore
+
+# Create the database from the migrations
+dotnet ef database update --project BudgetApi
+
 dotnet run --project BudgetApi
 ```
+
+To start again with a fresh database, stop the app and delete `BudgetApi/budget.db`, then run `dotnet ef database update --project BudgetApi` again.
 
 The API listens on `http://localhost:5090`.
 
@@ -64,8 +74,8 @@ curl "http://localhost:5090/api/reports/summary?start=2026-03-01&end=2026-03-31"
 | DELETE | /api/transactions/{id} | 204, 404 |
 | GET | /api/reports/summary?start={date}&end={date}&type={type} | 200, 400 |
 
-Data is kept in memory and is lost when the app stops.
+Data is stored in the SQLite file `BudgetApi/budget.db`, which is ignored by Git.
 
 ## Next step
 
-`step-02-ef-core`
+`step-03-queries`

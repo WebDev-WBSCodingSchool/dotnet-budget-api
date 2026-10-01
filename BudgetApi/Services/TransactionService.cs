@@ -1,46 +1,55 @@
-using System.Collections.Concurrent;
+using BudgetApi.Data;
 using BudgetApi.Dtos.Transactions;
 using BudgetApi.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace BudgetApi.Services;
 
-// Keeps transactions in memory. The data is lost when the app stops.
+// Stores transactions in the database through ApplicationDbContext.
 public class TransactionService : ITransactionService
 {
-    // Safe to use from several requests at the same time, which matters for a singleton.
-    private readonly ConcurrentDictionary<Guid, Transaction> _transactions = new();
+    private readonly ApplicationDbContext _db;
 
-    public Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync()
+    public TransactionService(ApplicationDbContext db)
     {
-        IReadOnlyList<TransactionResponseDto> transactions = _transactions.Values
+        _db = db;
+    }
+
+    public async Task<IReadOnlyList<TransactionResponseDto>> GetAllAsync()
+    {
+        // Read-only query: no tracking, and only the columns the DTO needs.
+        return await _db.Transactions
+            .AsNoTracking()
             .OrderByDescending(t => t.Timestamp)
-            .Select(ToDto)
-            .ToList();
-        return Task.FromResult(transactions);
+            .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
+            .ToListAsync();
     }
 
-    // Both dates are inclusive. A transaction's day is the calendar date of its own Timestamp.
-    public Task<IReadOnlyList<TransactionResponseDto>> GetInRangeAsync(DateOnly start, DateOnly end)
+    // Both dates are inclusive. The database compares points in time, so each day
+    // runs from midnight UTC to the next midnight UTC.
+    public async Task<IReadOnlyList<TransactionResponseDto>> GetInRangeAsync(DateOnly start, DateOnly end)
     {
-        IReadOnlyList<TransactionResponseDto> transactions = _transactions.Values
-            .Where(t =>
-            {
-                var day = DateOnly.FromDateTime(t.Timestamp.DateTime);
-                return day >= start && day <= end;
-            })
+        var from = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var to = new DateTimeOffset(end.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+        return await _db.Transactions
+            .AsNoTracking()
+            .Where(t => t.Timestamp >= from && t.Timestamp < to)
             .OrderBy(t => t.Timestamp)
-            .Select(ToDto)
-            .ToList();
-        return Task.FromResult(transactions);
+            .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
+            .ToListAsync();
     }
 
-    public Task<TransactionResponseDto?> GetByIdAsync(Guid id)
+    public async Task<TransactionResponseDto?> GetByIdAsync(Guid id)
     {
-        var transaction = _transactions.TryGetValue(id, out var found) ? ToDto(found) : null;
-        return Task.FromResult(transaction);
+        return await _db.Transactions
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => new TransactionResponseDto(t.Id, t.Timestamp, t.Type, t.Description, t.Amount))
+            .FirstOrDefaultAsync();
     }
 
-    public Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto)
+    public async Task<TransactionResponseDto> CreateAsync(CreateTransactionDto dto)
     {
         var transaction = new Transaction
         {
@@ -52,27 +61,41 @@ public class TransactionService : ITransactionService
             Amount = dto.Amount
         };
 
-        _transactions[transaction.Id] = transaction;
-        return Task.FromResult(ToDto(transaction));
+        _db.Transactions.Add(transaction);
+        await _db.SaveChangesAsync();
+
+        return ToDto(transaction);
     }
 
-    public Task<TransactionResponseDto?> UpdateAsync(Guid id, UpdateTransactionDto dto)
+    public async Task<TransactionResponseDto?> UpdateAsync(Guid id, UpdateTransactionDto dto)
     {
-        if (!_transactions.TryGetValue(id, out var transaction))
+        // FindAsync returns a tracked entity. SaveChangesAsync writes the properties that changed.
+        var transaction = await _db.Transactions.FindAsync(id);
+        if (transaction is null)
         {
-            return Task.FromResult<TransactionResponseDto?>(null);
+            return null;
         }
 
         transaction.Type = dto.Type!.Value;
         transaction.Description = dto.Description;
         transaction.Amount = dto.Amount;
         transaction.Timestamp = dto.Timestamp!.Value;
-        return Task.FromResult<TransactionResponseDto?>(ToDto(transaction));
+        await _db.SaveChangesAsync();
+
+        return ToDto(transaction);
     }
 
-    public Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id)
     {
-        return Task.FromResult(_transactions.TryRemove(id, out _));
+        var transaction = await _db.Transactions.FindAsync(id);
+        if (transaction is null)
+        {
+            return false;
+        }
+
+        _db.Transactions.Remove(transaction);
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     private static TransactionResponseDto ToDto(Transaction t) =>
